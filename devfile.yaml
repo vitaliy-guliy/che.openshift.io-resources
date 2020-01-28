@@ -1,0 +1,100 @@
+apiVersion: 1.0.0
+metadata:
+  name: che-theia
+projects:
+
+  - name: theia
+    source:
+      location: 'https://github.com/eclipse-theia/theia.git'
+      type: git
+      branch: master
+
+  - name: che-theia
+    source:
+      location: 'https://github.com/eclipse/che-theia.git'
+      type: git
+      branch: master
+
+components:
+  - id: redhat/vscode-yaml/latest
+    type: chePlugin
+
+  - mountSources: true
+    endpoints:
+      - name: theia-dev-flow
+        attributes:
+          protocol: http
+          public: 'true'
+        port: 3010
+    memoryLimit: 3Gi
+    type: dockerimage
+    alias: che-dev
+    image: 'vgulyy/che-theia-dev:osio1'
+
+  - id: che-incubator/typescript/latest
+    memoryLimit: 2048M
+    type: chePlugin
+
+  - id: eclipse/che-machine-exec-plugin/latest
+    type: chePlugin
+
+  - id: eclipse/che-theia/latest
+    memoryLimit: 2Gi
+    type: cheEditor
+    alias: theia-editor
+
+commands:
+
+  - name: '1. Prepare theia-* dirs'
+    actions:
+      - component: theia-editor
+        workdir: /projects
+        type: exec
+        command: |
+          mkdir /projects/theia-default-plugins; \
+          mkdir /projects/theia-plugins; \
+          mkdir /projects/theia-projects-dir; \
+          cd /default-theia-plugins; \
+          cp * /projects/theia-default-plugins/; \
+          echo -e "\e[32mDone\e[0m"
+
+  - name: '2. Sync'
+    actions:
+      - component: che-dev
+        workdir: /projects
+        type: exec
+        command: |
+          rsync -rtv --exclude='node_mobules' /projects/theia/ /tmp/theia/; \
+          echo -e "\e[32mDone\e[0m"
+
+  - name: '3. Init che:theia'
+    actions:
+      - component: che-dev
+        workdir: /tmp/theia
+        type: exec
+        command: |
+          che:theia init; \
+          echo -e "\e[32mDone\e[0m"
+
+  - name: '4. Build che:theia'
+    actions:
+      - component: che-dev
+        workdir: /tmp/theia
+        type: exec
+        command: |
+          yarn; \
+          echo -e "\e[32mDone\e[0m"
+
+  - name: '5. Launch'
+    actions:
+      - component: che-dev
+        workdir: /tmp/theia/examples/assembly
+        type: exec
+        command: |
+          export CHE_PROJECTS_ROOT="/projects/theia-projects-dir"; \
+          export THEIA_DEFAULT_PLUGINS="local-dir:///projects/theia-default-plugins"; \
+          export THEIA_PLUGINS="local-dir:///projects/theia-plugins"; \
+          export THEIA_PLUGIN_ENDPOINT_DISCOVERY_PORT='2506'; \
+          yarn theia start /projects/theia-projects-dir --hostname=0.0.0.0 --port=3010; \
+          echo -e "\e[32mDone\e[0m"
+
